@@ -7,6 +7,6 @@ struct EuclidApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [GameSession.self, UserSettings.self], isAutomaticMigrationEnabled: true)
+        .modelContainer(for: [GameSession.self, UserSettings.self])
     }
 }
