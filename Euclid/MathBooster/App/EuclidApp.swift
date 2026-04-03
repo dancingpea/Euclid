@@ -1,11 +1,5 @@
-//
-//  EuclidApp.swift
-//  Euclid
-//
-//  Created by Thomas Forget on 02/04/2026.
-//
-
 import SwiftUI
+import SwiftData
 
 @main
 struct EuclidApp: App {
@@ -13,5 +7,6 @@ struct EuclidApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [GameSession.self, UserSettings.self], isAutomaticMigrationEnabled: true)
     }
 }
