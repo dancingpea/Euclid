@@ -13,6 +13,11 @@ struct ContentView: View {
                     Label("Stats", systemImage: "chart.bar.fill")
                 }
 
+            TipsView()
+                .tabItem {
+                    Label("Tips", systemImage: "lightbulb.max.fill")
+                }
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")

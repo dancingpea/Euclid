@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct TipsView: View {
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -51,17 +49,6 @@ struct TipsView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.title3)
-                    }
-                }
-            }
         }
     }
 }
