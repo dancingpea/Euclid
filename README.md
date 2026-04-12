@@ -30,6 +30,7 @@ Euclid generates math problems across 10 operation types and lets you solve them
 - Daily reminder notifications
 - Skip button for problems you want to pass on
 - End session early with progress saved
+- Built-in mental math tips and techniques (beginner to advanced)
 
 ## Tech Stack
 
@@ -55,6 +56,7 @@ MathBooster/
 │   ├── Home/             # Start screen with streak and quick stats
 │   ├── Game/             # Game play, number pad, results
 │   ├── Stats/            # Charts, session history, operation breakdown
+│   ├── Tips/             # Mental math tips and strategy guides
 │   └── Settings/         # Operations, difficulty, game mode, preferences
 ├── Services/             # Problem generation, difficulty engine, haptics, sound
 └── Utilities/            # Constants and extensions
@@ -67,6 +69,13 @@ MathBooster/
 3. Build and run on a simulator or device (iOS 17+)
 
 No packages to install, no configuration needed.
+
+## Website & Privacy Policy
+
+The app's landing page and privacy policy are hosted via GitHub Pages from the `docs/` folder:
+
+- Landing page: [https://dancingpea.github.io/Euclid/](https://dancingpea.github.io/Euclid/)
+- Privacy policy: [https://dancingpea.github.io/Euclid/privacy.html](https://dancingpea.github.io/Euclid/privacy.html)
 
 ## License
 
