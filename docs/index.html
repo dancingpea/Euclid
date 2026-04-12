@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Euclid — Privacy Policy</title>
+    <title>Euclid — Mental Math Training</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -11,65 +11,184 @@
             line-height: 1.7;
             color: #1d1d1f;
             background: #fbfbfd;
+        }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 4rem 1.5rem 3rem;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+        }
+        .hero img {
+            width: 120px;
+            height: 120px;
+            border-radius: 24px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        }
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .hero .tagline {
+            font-size: 1.15rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+        .hero .price {
+            display: inline-block;
+            margin-top: 1.5rem;
+            padding: 0.5rem 1.5rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        /* Sections */
+        .section {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
+        .section h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        /* Features */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+        @media (max-width: 500px) {
+            .features { grid-template-columns: 1fr; }
+        }
+        .feature {
+            padding: 1.25rem;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e5e5ea;
+        }
+        .feature .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .feature h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .feature p {
+            font-size: 0.875rem;
+            color: #6e6e73;
+            line-height: 1.5;
+        }
+
+        /* Support */
+        .support {
+            background: #f5f5f7;
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+        }
+        .support h2 { margin-bottom: 0.75rem; }
+        .support p {
+            color: #6e6e73;
+            margin-bottom: 1rem;
+        }
+        .support a.email {
+            display: inline-block;
+            padding: 0.6rem 1.5rem;
+            background: #4f46e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .support a.email:hover { background: #4338ca; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
             padding: 2rem 1.5rem;
+            color: #86868b;
+            font-size: 0.85rem;
+            border-top: 1px solid #e5e5ea;
             max-width: 680px;
             margin: 0 auto;
         }
-        h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-        }
-        .subtitle {
-            color: #86868b;
-            margin-bottom: 2rem;
-        }
-        h2 {
-            font-size: 1.15rem;
-            font-weight: 600;
-            margin-top: 2rem;
-            margin-bottom: 0.5rem;
-        }
-        p { margin-bottom: 1rem; }
-        a { color: #6e5ce6; }
-        .footer {
-            margin-top: 3rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid #e5e5ea;
-            color: #86868b;
-            font-size: 0.85rem;
-        }
+        .footer a { color: #6e5ce6; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <h1>Privacy Policy</h1>
-    <p class="subtitle">Euclid — Mental Math Training</p>
 
-    <p><strong>Effective date:</strong> April 12, 2026</p>
+    <!-- Hero -->
+    <div class="hero">
+        <img src="icon.png" alt="Euclid app icon">
+        <h1>Euclid Math</h1>
+        <p class="tagline">Mental math training that fits in your pocket.</p>
+        <div class="price">One-time purchase — no subscriptions</div>
+    </div>
 
-    <h2>The short version</h2>
-    <p>Euclid does not collect, store, or share any personal data. Period.</p>
+    <!-- Features -->
+    <div class="section">
+        <h2>What you get</h2>
+        <div class="features">
+            <div class="feature">
+                <div class="icon">🧮</div>
+                <h3>10 Operations</h3>
+                <p>Addition, subtraction, multiplication, division, squares, square roots, exponents, percentages, fractions, and mixed mode.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📈</div>
+                <h3>Adaptive Difficulty</h3>
+                <p>Starts easy and ramps up as you improve — or pick a fixed range from 1–100 up to 1,000–10,000.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">⏱️</div>
+                <h3>Two Game Modes</h3>
+                <p>Race the clock in Timed mode, or work through a fixed set of problems in Task mode.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📊</div>
+                <h3>Progress Tracking</h3>
+                <p>Accuracy, speed, streaks, and full session history so you can see exactly where you're improving.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">💡</div>
+                <h3>Mental Math Tips</h3>
+                <p>Built-in strategies and techniques to help you solve problems faster in your head.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔒</div>
+                <h3>100% Private</h3>
+                <p>No accounts, no analytics, no tracking. Your data stays on your device — always.</p>
+            </div>
+        </div>
+    </div>
 
-    <h2>Data collection</h2>
-    <p>Euclid runs entirely on your device. The app does not connect to any server, does not require an account, and does not use any analytics or tracking frameworks. No personal information, usage data, or device identifiers are collected — ever.</p>
+    <!-- Support -->
+    <div class="section">
+        <div class="support">
+            <h2>Need help?</h2>
+            <p>If you have questions, feedback, or run into any issues, feel free to reach out.</p>
+            <a class="email" href="mailto:thomasforget@live.fr">Contact Support</a>
+        </div>
+    </div>
 
-    <h2>Data storage</h2>
-    <p>Your game sessions, statistics, and settings are stored locally on your iPhone using Apple's on-device storage (SwiftData). This data never leaves your device and is not accessible to us or any third party.</p>
-
-    <h2>Third-party services</h2>
-    <p>Euclid does not integrate any third-party SDKs, advertising networks, or analytics services. There are zero external dependencies.</p>
-
-    <h2>Children's privacy</h2>
-    <p>Because Euclid collects no data whatsoever, it is safe for users of all ages. The app complies with COPPA and other applicable children's privacy regulations by design.</p>
-
-    <h2>Changes to this policy</h2>
-    <p>If this policy is ever updated, the changes will be posted on this page with a revised effective date. Since the app collects no data, meaningful changes are unlikely.</p>
-
-    <h2>Contact</h2>
-    <p>If you have any questions about this privacy policy, you can reach me at <a href="mailto:thomasforget@live.fr">thomasforget@live.fr</a>.</p>
-
+    <!-- Footer -->
     <div class="footer">
         <p>&copy; 2026 Thomas Forget. All rights reserved.</p>
+        <p style="margin-top: 0.5rem;"><a href="privacy.html">Privacy Policy</a></p>
     </div>
+
 </body>
 </html>
