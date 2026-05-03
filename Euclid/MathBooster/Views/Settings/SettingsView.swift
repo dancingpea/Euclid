@@ -193,6 +193,18 @@ struct SettingsView: View {
                     get: { settings.hapticEnabled },
                     set: { _ in viewModel.toggleHaptic() }
                 ))
+
+                Toggle(isOn: Binding(
+                    get: { settings.showCorrectAnswerOnMistake },
+                    set: { _ in viewModel.toggleShowCorrectAnswer() }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show Correct Answer")
+                        Text("Briefly reveal the right answer when you miss or skip")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             // MARK: - Notifications

@@ -9,7 +9,7 @@ struct SessionDetailView: View {
                 StatRow(label: "Date", value: session.date.relativeDateString)
                 StatRow(label: "Duration", value: session.duration.timerString)
                 StatRow(label: "Mode", value: (GameMode(rawValue: session.gameMode) ?? .timed).displayName)
-                StatRow(label: "Difficulty", value: (Difficulty(rawValue: session.difficulty) ?? .range1to100).displayName)
+                StatRow(label: "Difficulty", value: (Difficulty(rawValue: session.difficulty) ?? .range1to10).displayName)
                 StatRow(label: "Problems", value: "\(session.totalProblems)")
                 StatRow(label: "Correct", value: "\(session.correctAnswers)")
                 StatRow(label: "Skipped", value: "\(session.skippedCount)")
@@ -26,14 +26,19 @@ struct SessionDetailView: View {
                                 .frame(width: 24)
 
                             VStack(alignment: .leading, spacing: 2) {
+                                // Prefer the typed strings (e.g. "3/4") when available;
+                                // fall back to the legacy Double formatting for old sessions.
+                                let correctText = result.correctAnswerText ?? result.correctAnswer.cleanString
+                                let userText = result.userAnswerText ?? result.userAnswer.map { $0.cleanString } ?? "?"
+
                                 Text(result.problemText)
                                     .font(.subheadline)
                                 if result.wasSkipped {
-                                    Text("Skipped - Answer: \(result.correctAnswer.cleanString)")
+                                    Text("Skipped - Answer: \(correctText)")
                                         .font(.caption)
                                         .foregroundStyle(.orange)
                                 } else if !result.isCorrect {
-                                    Text("Your answer: \(result.userAnswer.map { $0.cleanString } ?? "?") - Correct: \(result.correctAnswer.cleanString)")
+                                    Text("Your answer: \(userText) - Correct: \(correctText)")
                                         .font(.caption)
                                         .foregroundStyle(.red)
                                 }

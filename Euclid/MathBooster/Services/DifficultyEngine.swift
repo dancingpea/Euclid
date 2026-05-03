@@ -1,18 +1,25 @@
 import Foundation
 
-/// Determines operand ranges based on the current difficulty level.
-/// For adaptive mode, steps through the 3 fixed tiers based on recent accuracy.
+/// Determines the active difficulty tier. For fixed tiers it just echoes the choice;
+/// for adaptive mode it steps through `Difficulty.adaptiveLevels` based on recent accuracy.
 class DifficultyEngine {
-    private(set) var currentAdaptiveLevel: Difficulty = .range1to100
+    private(set) var currentAdaptiveLevel: Difficulty = .range1to10
     private var recentResults: [Bool] = []
     private let windowSize = 10
 
-    /// The operand range for the given difficulty.
-    func operandRange(for difficulty: Difficulty) -> (min: Int, max: Int) {
+    /// Resolve a (possibly adaptive) difficulty choice to a concrete fixed tier.
+    /// Generators should always pass the resolved value to read both `operandRange`
+    /// and `resultCap` consistently.
+    func resolvedDifficulty(for difficulty: Difficulty) -> Difficulty {
         if difficulty == .adaptive {
-            return currentAdaptiveLevel.operandRange
+            return currentAdaptiveLevel
         }
-        return difficulty.operandRange
+        return difficulty
+    }
+
+    /// Operand range for the (possibly adaptive) difficulty.
+    func operandRange(for difficulty: Difficulty) -> (min: Int, max: Int) {
+        resolvedDifficulty(for: difficulty).operandRange
     }
 
     /// Feed a result (correct/wrong) to update adaptive difficulty.
@@ -27,7 +34,7 @@ class DifficultyEngine {
     /// Reset adaptive state for a new game.
     func reset() {
         recentResults = []
-        currentAdaptiveLevel = .range1to100
+        currentAdaptiveLevel = .range1to10
     }
 
     // MARK: - Private

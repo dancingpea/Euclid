@@ -7,10 +7,23 @@ enum GameState: Sendable {
     case finished
 }
 
-enum FeedbackState: Sendable {
+enum FeedbackState: Sendable, Equatable {
     case none
     case correct
-    case wrong
+    case wrong(correctAnswer: String)
+    case skipped(correctAnswer: String)
+}
+
+/// User-input state, supporting both the existing single-field numpad input
+/// and the new two-field fraction input (numerator + denominator).
+enum UserInputState: Equatable {
+    case single(String)
+    case fraction(numerator: String, denominator: String, active: FractionField)
+
+    enum FractionField: Equatable {
+        case numerator
+        case denominator
+    }
 }
 
 /// Drives the game screen: generates problems, tracks time/score, handles both game modes.
@@ -20,7 +33,10 @@ class GameViewModel {
     var state: GameState = .countdown
     var countdownValue: Int = AppConstants.countdownSeconds
     var currentProblem: Problem?
-    var userAnswer: String = ""
+
+    /// Rich input state. Use `userAnswer` for a flat display string.
+    var userInput: UserInputState = .single("")
+
     var score: Int = 0
     var totalAnswered: Int = 0
     var correctCount: Int = 0
@@ -34,12 +50,13 @@ class GameViewModel {
 
     // MARK: - Settings (copied at game start)
     private(set) var operations: [MathOperation] = []
-    private(set) var difficulty: Difficulty = .range1to100
+    private(set) var difficulty: Difficulty = .range1to10
     private(set) var gameMode: GameMode = .timed
     private(set) var timerDuration: Int = 90
     private(set) var taskCount: Int = 20
     private(set) var decimalsEnabled: Bool = false
     private(set) var negativesEnabled: Bool = false
+    private(set) var showCorrectAnswerOnMistake: Bool = true
     private var soundEnabled: Bool = true
     private var hapticEnabled: Bool = true
 
@@ -51,6 +68,20 @@ class GameViewModel {
     private var problemStartTime: Date = .now
 
     // MARK: - Computed
+
+    /// Display string for the user's current input. GameView uses this to render
+    /// the typed answer (so changing the underlying state didn't require touching GameView).
+    var userAnswer: String {
+        switch userInput {
+        case .single(let text):
+            return text
+        case .fraction(let num, let den, _):
+            if num.isEmpty && den.isEmpty { return "" }
+            if den.isEmpty { return num }
+            if num.isEmpty { return "/\(den)" }
+            return "\(num)/\(den)"
+        }
+    }
 
     var accuracy: Double {
         guard totalAnswered > 0 else { return 0 }
@@ -84,6 +115,7 @@ class GameViewModel {
         negativesEnabled = settings.negativesEnabled
         soundEnabled = settings.soundEnabled
         hapticEnabled = settings.hapticEnabled
+        showCorrectAnswerOnMistake = settings.showCorrectAnswerOnMistake
         timeRemaining = Double(timerDuration)
         difficultyEngine.reset()
     }
@@ -127,6 +159,10 @@ class GameViewModel {
 
     private func tickGame() {
         guard state == .playing else { return }
+        if showCorrectAnswerOnMistake {
+            if case .wrong = feedbackState { return }
+            if case .skipped = feedbackState { return }
+        }
         elapsedTime += 0.1
         if gameMode == .timed && timerDuration > 0 {
             timeRemaining = max(0, Double(timerDuration) - elapsedTime)
@@ -141,18 +177,22 @@ class GameViewModel {
     func submitAnswer(settings: UserSettings) {
         guard state == .playing, let problem = currentProblem else { return }
 
+        // Bail on unparseable single-mode input (preserves the original behavior
+        // where typing only "-" doesn't submit anything).
+        if case .single(let text) = userInput, !text.isEmpty, Double(text) == nil {
+            return
+        }
+
         let timeTaken = Date.now.timeIntervalSince(problemStartTime)
-
-        // Parse answer — treat empty as 0
-        let cleanAnswer = userAnswer.isEmpty ? "0" : userAnswer
-        guard let answer = Double(cleanAnswer) else { return }
-
-        let correct = problem.isCorrect(userAnswer: answer)
+        let parsed = parseUserInput()
+        let correct = problem.isCorrect(input: parsed.input)
 
         let result = ProblemResult(
             problemText: problem.text,
             correctAnswer: problem.correctAnswer,
-            userAnswer: answer,
+            correctAnswerText: problem.displayAnswer,
+            userAnswer: parsed.numeric,
+            userAnswerText: parsed.display.isEmpty ? nil : parsed.display,
             isCorrect: correct,
             wasSkipped: false,
             operation: problem.operation.rawValue,
@@ -168,7 +208,7 @@ class GameViewModel {
             if soundEnabled { SoundManager.shared.correctSound() }
             if hapticEnabled { HapticManager.shared.correct() }
         } else {
-            feedbackState = .wrong
+            feedbackState = .wrong(correctAnswer: problem.displayAnswer)
             if soundEnabled { SoundManager.shared.wrongSound() }
             if hapticEnabled { HapticManager.shared.wrong() }
         }
@@ -177,17 +217,51 @@ class GameViewModel {
             difficultyEngine.recordResult(correct)
         }
 
-        // Check if task count mode is done
+        let feedbackDuration: TimeInterval
+        if correct {
+            feedbackDuration = 0.4
+        } else {
+            feedbackDuration = showCorrectAnswerOnMistake ? 1.2 : 0.4
+        }
+
         if gameMode == .taskCount && totalAnswered >= taskCount {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + feedbackDuration) { [weak self] in
                 self?.endGame()
             }
             return
         }
 
-        // Next problem after brief feedback
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + feedbackDuration) { [weak self] in
             self?.advanceToNextProblem()
+        }
+    }
+
+    /// Convert the current `userInput` state into the three values the rest of
+    /// the pipeline needs: a `UserAnswerInput` for `Problem.isCorrect`, a Double?
+    /// for stats, and a String for display in feedback / stats.
+    private func parseUserInput() -> (input: UserAnswerInput, numeric: Double?, display: String) {
+        switch userInput {
+        case .single(let text):
+            let cleanText = text.isEmpty ? "0" : text
+            return (.single(cleanText), Double(cleanText), text)
+
+        case .fraction(let num, let den, _):
+            let display: String
+            if num.isEmpty && den.isEmpty { display = "" }
+            else if den.isEmpty { display = num }
+            else if num.isEmpty { display = "/\(den)" }
+            else { display = "\(num)/\(den)" }
+
+            let numeric: Double?
+            if den.isEmpty {
+                numeric = Double(num)
+            } else if let n = Double(num), let d = Double(den), d != 0 {
+                numeric = n / d
+            } else {
+                numeric = nil
+            }
+
+            return (.fraction(numerator: num, denominator: den), numeric, display)
         }
     }
 
@@ -198,7 +272,9 @@ class GameViewModel {
         let result = ProblemResult(
             problemText: problem.text,
             correctAnswer: problem.correctAnswer,
+            correctAnswerText: problem.displayAnswer,
             userAnswer: nil,
+            userAnswerText: nil,
             isCorrect: false,
             wasSkipped: true,
             operation: problem.operation.rawValue,
@@ -210,12 +286,29 @@ class GameViewModel {
 
         if hapticEnabled { HapticManager.shared.buttonTap() }
 
-        if gameMode == .taskCount && totalAnswered >= taskCount {
-            endGame()
+        guard showCorrectAnswerOnMistake else {
+            if gameMode == .taskCount && totalAnswered >= taskCount {
+                endGame()
+                return
+            }
+            nextProblem()
             return
         }
 
-        nextProblem()
+        feedbackState = .skipped(correctAnswer: problem.displayAnswer)
+
+        let feedbackDuration: TimeInterval = 1.2
+
+        if gameMode == .taskCount && totalAnswered >= taskCount {
+            DispatchQueue.main.asyncAfter(deadline: .now() + feedbackDuration) { [weak self] in
+                self?.endGame()
+            }
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + feedbackDuration) { [weak self] in
+            self?.advanceToNextProblem()
+        }
     }
 
     private func advanceToNextProblem() {
@@ -225,7 +318,6 @@ class GameViewModel {
     }
 
     private func nextProblem() {
-        userAnswer = ""
         currentProblem = generator.generate(
             operations: operations,
             difficulty: difficulty,
@@ -233,6 +325,17 @@ class GameViewModel {
             decimalsEnabled: decimalsEnabled,
             negativesEnabled: negativesEnabled
         )
+        // Reset input state to match the new problem's input kind.
+        if let kind = currentProblem?.inputKind {
+            switch kind {
+            case .singleField:
+                userInput = .single("")
+            case .twoFieldFraction:
+                userInput = .fraction(numerator: "", denominator: "", active: .numerator)
+            }
+        } else {
+            userInput = .single("")
+        }
         problemStartTime = .now
     }
 
@@ -283,24 +386,71 @@ class GameViewModel {
     // MARK: - Input
 
     func appendDigit(_ digit: String) {
-        guard userAnswer.count < AppConstants.maxAnswerLength else { return }
-        if digit == "." && userAnswer.contains(".") { return }
-        if digit == "-" {
-            if userAnswer.isEmpty {
-                userAnswer = "-"
-            } else if userAnswer == "-" {
-                userAnswer = ""
+        switch userInput {
+        case .single(var text):
+            guard text.count < AppConstants.maxAnswerLength else { return }
+            if digit == "." && text.contains(".") { return }
+            if digit == "-" {
+                if text.isEmpty {
+                    text = "-"
+                } else if text == "-" {
+                    text = ""
+                }
+                userInput = .single(text)
+                playButtonFeedback()
+                return
             }
-            return
+            text += digit
+            userInput = .single(text)
+            playButtonFeedback()
+
+        case .fraction(var num, var den, let active):
+            // No negative sign in fraction mode.
+            if digit == "-" { return }
+            switch active {
+            case .numerator:
+                guard num.count < AppConstants.maxAnswerLength else { return }
+                if digit == "." && num.contains(".") { return }
+                num += digit
+            case .denominator:
+                guard den.count < AppConstants.maxAnswerLength else { return }
+                if digit == "." && den.contains(".") { return }
+                den += digit
+            }
+            userInput = .fraction(numerator: num, denominator: den, active: active)
+            playButtonFeedback()
         }
-        userAnswer += digit
-        if hapticEnabled { HapticManager.shared.buttonTap() }
-        if soundEnabled { SoundManager.shared.buttonSound() }
     }
 
     func deleteLastDigit() {
-        guard !userAnswer.isEmpty else { return }
-        userAnswer.removeLast()
+        switch userInput {
+        case .single(var text):
+            guard !text.isEmpty else { return }
+            text.removeLast()
+            userInput = .single(text)
+        case .fraction(var num, var den, let active):
+            switch active {
+            case .numerator:
+                guard !num.isEmpty else { return }
+                num.removeLast()
+            case .denominator:
+                guard !den.isEmpty else { return }
+                den.removeLast()
+            }
+            userInput = .fraction(numerator: num, denominator: den, active: active)
+        }
         if hapticEnabled { HapticManager.shared.buttonTap() }
+    }
+
+    /// Switch the active field in two-field fraction input mode. No-op otherwise.
+    func setActiveField(_ field: UserInputState.FractionField) {
+        if case .fraction(let num, let den, _) = userInput {
+            userInput = .fraction(numerator: num, denominator: den, active: field)
+        }
+    }
+
+    private func playButtonFeedback() {
+        if hapticEnabled { HapticManager.shared.buttonTap() }
+        if soundEnabled { SoundManager.shared.buttonSound() }
     }
 }

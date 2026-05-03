@@ -123,12 +123,22 @@ struct GameView: View {
                 }
                 .padding()
 
-                // User answer display
-                Text(viewModel.userAnswer.isEmpty ? "?" : viewModel.userAnswer)
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                    .foregroundStyle(feedbackColor)
-                    .animation(.easeInOut(duration: 0.15), value: viewModel.feedbackState)
-                    .frame(height: 60)
+                // User answer display — replaced by a banner when the "show correct answer" toggle is on
+                ZStack {
+                    if viewModel.showCorrectAnswerOnMistake,
+                       case .wrong(let answer) = viewModel.feedbackState {
+                        feedbackBanner(text: "Correct: \(answer)", color: .red)
+                    } else if viewModel.showCorrectAnswerOnMistake,
+                              case .skipped(let answer) = viewModel.feedbackState {
+                        feedbackBanner(text: "Answer: \(answer)", color: .orange)
+                    } else {
+                        Text(viewModel.userAnswer.isEmpty ? "?" : viewModel.userAnswer)
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .foregroundStyle(feedbackColor)
+                    }
+                }
+                .frame(height: 60)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.feedbackState)
             }
 
             Spacer()
@@ -143,8 +153,19 @@ struct GameView: View {
         switch viewModel.feedbackState {
         case .none: return .primary
         case .correct: return .green
-        case .wrong: return .red
+        case .wrong, .skipped: return .red  // Not actually rendered — the banner replaces the answer text
         }
+    }
+
+    @ViewBuilder
+    private func feedbackBanner(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 28, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(color, in: Capsule())
+            .transition(.scale.combined(with: .opacity))
     }
 
 }

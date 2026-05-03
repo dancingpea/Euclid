@@ -20,6 +20,7 @@ class UserSettings {
     var negativesEnabled: Bool         // allow negative operands
     var soundEnabled: Bool
     var hapticEnabled: Bool
+    var showCorrectAnswerOnMistake: Bool = true   // briefly show the right answer on wrong/skipped
 
     // Notifications
     var notificationsEnabled: Bool
@@ -38,7 +39,7 @@ class UserSettings {
     }
 
     var difficultyLevel: Difficulty {
-        get { Difficulty(rawValue: difficulty) ?? .range1to100 }
+        get { Difficulty(rawValue: difficulty) ?? .range1to10 }
         set { difficulty = newValue.rawValue }
     }
 
@@ -62,7 +63,7 @@ class UserSettings {
 
     init(
         enabledOperations: [String] = MathOperation.defaults.map(\.rawValue),
-        difficulty: String = Difficulty.range1to100.rawValue,
+        difficulty: String = Difficulty.range1to10.rawValue,
         gameMode: String = GameMode.timed.rawValue,
         timerDuration: Int = 90,
         taskCount: Int = 20,
@@ -70,6 +71,7 @@ class UserSettings {
         negativesEnabled: Bool = false,
         soundEnabled: Bool = true,
         hapticEnabled: Bool = true,
+        showCorrectAnswerOnMistake: Bool = true,
         notificationsEnabled: Bool = false,
         notificationHour: Int = 9,
         notificationMinute: Int = 0,
@@ -85,6 +87,7 @@ class UserSettings {
         self.negativesEnabled = negativesEnabled
         self.soundEnabled = soundEnabled
         self.hapticEnabled = hapticEnabled
+        self.showCorrectAnswerOnMistake = showCorrectAnswerOnMistake
         self.notificationsEnabled = notificationsEnabled
         self.notificationHour = notificationHour
         self.notificationMinute = notificationMinute

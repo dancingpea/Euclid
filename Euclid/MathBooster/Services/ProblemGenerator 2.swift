@@ -8,10 +8,8 @@ import Foundation
 ///
 /// A few operations don't fit that mold and are bounded directly:
 ///   - **Subtraction** is operand-bounded (the result is naturally smaller than the operands).
-///   - **Percentage** picks a percentage from a per-tier pool, then derives valid
-///     bases on the fly so every answer is an integer.
-///   - **Fraction** dispatches to one of four modes (recognition, recall,
-///     simplification, calculation) selected at random per problem.
+///   - **Percentage** uses a per-tier list of round bases × clean percentages.
+///   - **Fraction** uses per-tier denominator caps (results are always near 0–2).
 struct ProblemGenerator {
 
     // MARK: - Anti-repeat state
@@ -108,7 +106,7 @@ struct ProblemGenerator {
         }
     }
 
-    // MARK: - Generators (basic operations, unchanged)
+    // MARK: - Generators
 
     private func makeAddition(difficulty: Difficulty, negativesEnabled: Bool) -> Problem {
         let range = difficulty.operandRange
@@ -124,10 +122,13 @@ struct ProblemGenerator {
                 return buildProblem(text: "\(sa) + \(sb)", answer: Double(answer), operation: .addition)
             }
         }
+        // Safe fallback: smallest operands always fit.
         return buildProblem(text: "\(range.min) + \(range.min)", answer: Double(range.min + range.min), operation: .addition)
     }
 
     private func makeSubtraction(difficulty: Difficulty, negativesEnabled: Bool) -> Problem {
+        // Subtraction is operand-bounded: the result of `a - b` with a, b ∈ operandRange
+        // is naturally smaller than the operands themselves, so the result cap is satisfied.
         let range = difficulty.operandRange
         var a = Int.random(in: range.min...range.max)
         var b = Int.random(in: range.min...range.max)
@@ -150,6 +151,7 @@ struct ProblemGenerator {
                 return buildProblem(text: "\(sa) x \(sb)", answer: Double(product), operation: .multiplication)
             }
         }
+        // Safe fallback: smallest × smallest.
         let p = range.min * range.min
         return buildProblem(text: "\(range.min) x \(range.min)", answer: Double(p), operation: .multiplication)
     }
@@ -161,9 +163,11 @@ struct ProblemGenerator {
     ) -> Problem {
         let range = difficulty.operandRange
         let cap = difficulty.resultCap
+        // Divisor pool tracks the operand range but stays in the times-table zone.
         let divisorMax = max(2, min(12, range.max))
 
         if decimalsEnabled {
+            // Allow non-clean divisions; round answer to 2 decimal places.
             for _ in 0..<maxRetries {
                 let a = Int.random(in: range.min...range.max)
                 let b = Int.random(in: 2...divisorMax)
@@ -175,6 +179,8 @@ struct ProblemGenerator {
             return buildProblem(text: "\(range.min) / 2", answer: Double(range.min) / 2.0, operation: .division)
         }
 
+        // Clean division: pick divisor + quotient, then dividend = b * quotient.
+        // Reject if either dividend or quotient would exceed the cap.
         for _ in 0..<maxRetries {
             let b = Int.random(in: 2...divisorMax)
             let quotient = Int.random(in: range.min...range.max)
@@ -186,6 +192,7 @@ struct ProblemGenerator {
                 return buildProblem(text: "\(displayA) / \(b)", answer: Double(answer), operation: .division)
             }
         }
+        // Fallback: range.min × 2 / 2.
         let safeA = range.min * 2
         return buildProblem(text: "\(safeA) / 2", answer: Double(range.min), operation: .division)
     }
@@ -193,12 +200,14 @@ struct ProblemGenerator {
     private func makeSquare(difficulty: Difficulty, negativesEnabled: Bool) -> Problem {
         let range = difficulty.operandRange
         let cap = difficulty.resultCap
+        // Bound base by both the operand range and √cap.
         let maxBase = max(2, min(range.max, Int(Double(cap).squareRoot())))
         let minBase = max(2, range.min)
         let upper = max(minBase, maxBase)
         let base = Int.random(in: minBase...upper)
         let sign = negativesEnabled && Bool.random() ? -1 : 1
         let displayBase = base * sign
+        // Even power → answer is always positive regardless of base sign.
         let answer = base * base
         return buildProblem(text: "\(displayBase)^2", answer: Double(answer), operation: .square)
     }
@@ -206,6 +215,7 @@ struct ProblemGenerator {
     private func makeSquareRoot(difficulty: Difficulty) -> Problem {
         let range = difficulty.operandRange
         let cap = difficulty.resultCap
+        // The displayed perfect square is what's bounded by the cap.
         let maxRoot = max(2, min(range.max, Int(Double(cap).squareRoot())))
         let minRoot = max(2, range.min)
         let upper = max(minRoot, maxRoot)
@@ -217,9 +227,11 @@ struct ProblemGenerator {
     private func makeExponent(difficulty: Difficulty, negativesEnabled: Bool) -> Problem {
         let cap = difficulty.resultCap
 
+        // Per-tier exponent ceiling. Bases stay in 2...12 across all tiers; the
+        // result cap keeps absurd values like 12⁵ out of Easy/Medium.
         let maxExp: Int
         switch difficulty {
-        case .range1to10:   maxExp = 2
+        case .range1to10:   maxExp = 2  // squares only at Easy
         case .range1to100:  maxExp = 3
         case .range1to1000: maxExp = 5
         case .adaptive:     maxExp = 2
@@ -232,6 +244,7 @@ struct ProblemGenerator {
             if result <= cap {
                 let sign = negativesEnabled && Bool.random() ? -1 : 1
                 let displayBase = base * sign
+                // Even exponents always yield a positive result; odd exponents preserve sign.
                 let answer = exp % 2 == 0 ? Double(result) : Double(result) * Double(sign)
                 return buildProblem(text: "\(displayBase)^\(exp)", answer: answer, operation: .exponent)
             }
@@ -239,53 +252,60 @@ struct ProblemGenerator {
         return buildProblem(text: "2^2", answer: 4, operation: .exponent)
     }
 
-    // MARK: - Percentage (integer-only answers)
-
     /// Question forms used by `makePercentage`. Easy uses only `partOfWhole`;
-    /// Medium adds `whatPercent`; Hard adds `findWhole`.
+    /// Medium adds `whatPercent`; Hard adds `findWhole`, `increase`, `decrease`.
     private enum PercentForm {
         case partOfWhole   // "25% of 80 = ?"            → answer is the part (20)
         case whatPercent   // "What % of 80 is 20?"      → answer is the percent (25)
         case findWhole     // "20 is 25% of what?"       → answer is the whole (80)
+        case increase      // "80 + 15%"                 → answer is base + part (92)
+        case decrease      // "80 - 15%"                 → answer is base - part (68)
     }
 
     private func makePercentage(difficulty: Difficulty) -> Problem {
-        // Per-tier vocabulary. The base is generated on the fly (not from a
-        // fixed list) using the GCD rule below, so every (pct, base) combo
-        // we produce yields an integer answer. 100% is omitted — trivial
-        // identity that wastes a turn.
+        // Per-tier vocabulary. Every (pct × base) / 100 combination yields an
+        // integer or a half-integer answer (no awkward repeating decimals).
+        // 100% has been removed — it's a trivial identity that wastes a turn.
         let percentages: [Int]
-        let minBase: Int
-        let maxBase: Int
+        let bases: [Int]
+        let specialPairs: [(pct: Int, base: Int)]
         let availableForms: [PercentForm]
 
         switch difficulty {
         case .range1to10:
             percentages = [10, 20, 25, 50, 75]
-            minBase = 10
-            maxBase = 100
+            bases = [10, 20, 40, 50, 60, 80, 100]
+            specialPairs = []
             availableForms = [.partOfWhole]
         case .range1to100:
-            percentages = [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80]
-            minBase = 20
-            maxBase = 1000
+            percentages = [5, 10, 15, 20, 25, 30, 40, 50, 75]
+            bases = [20, 40, 60, 80, 100, 120, 160, 200, 240, 300, 400, 500, 600, 800]
+            specialPairs = []
             availableForms = [.partOfWhole, .whatPercent]
         case .range1to1000, .adaptive:
-            percentages = [3, 5, 7, 10, 12, 15, 17, 20, 25, 30, 33, 40, 50, 60, 67, 75, 80, 90]
-            minBase = 100
-            maxBase = 5000
-            availableForms = [.partOfWhole, .whatPercent, .findWhole]
+            percentages = [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 90]
+            bases = [100, 200, 400, 500, 600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000, 8000, 10000]
+            // Less-round percentages curated to still produce clean answers.
+            specialPairs = [
+                (33, 300), (33, 600), (33, 900), (33, 3000),
+                (17, 100), (17, 200), (17, 500), (17, 1000),
+                (12, 50), (12, 100), (12, 200), (12, 500), (12, 1000),
+                (3, 100), (3, 200), (3, 400), (3, 1000)
+            ]
+            availableForms = [.partOfWhole, .whatPercent, .findWhole, .increase, .decrease]
         }
 
-        let pct = percentages.randomElement()!
-
-        // For pct × base / 100 to be an integer, pct × base must be
-        // divisible by 100. The smallest base satisfying this is
-        // 100 / gcd(pct, 100); any multiple of that step is also valid.
-        let step = 100 / gcd(pct, 100)
-        let minMultiplier = max(1, (minBase + step - 1) / step)
-        let maxMultiplier = max(minMultiplier, maxBase / step)
-        let base = step * Int.random(in: minMultiplier...maxMultiplier)
+        // ~20% of Hard percentage problems use the special-pair list for variety.
+        let useSpecial = !specialPairs.isEmpty && Int.random(in: 0..<5) == 0
+        let pct: Int
+        let base: Int
+        if useSpecial, let pair = specialPairs.randomElement() {
+            pct = pair.pct
+            base = pair.base
+        } else {
+            pct = percentages.randomElement()!
+            base = bases.randomElement()!
+        }
 
         let part = Double(pct * base) / 100.0
         let form = availableForms.randomElement()!
@@ -302,283 +322,87 @@ struct ProblemGenerator {
         case .findWhole:
             text = "\(part.cleanString) is \(pct)% of what?"
             answer = Double(base)
+        case .increase:
+            text = "\(base) + \(pct)%"
+            answer = Double(base) + part
+        case .decrease:
+            text = "\(base) - \(pct)%"
+            answer = Double(base) - part
         }
 
         return buildProblem(text: text, answer: answer, operation: .percentage)
     }
 
-    // MARK: - Fractions
-
-    /// The four user-facing question types within the fraction operation.
-    private enum FractionMode: CaseIterable {
-        case toDecimalOrPercent      // Mode 1: "3/4 as a decimal" → 0.75
-        case fromDecimalOrPercent    // Mode 2: "0.75 as a fraction" → 3/4
-        case simplify                // Mode 3: "Simplify 6/8" → 3/4
-        case calculate               // Mode 4: "1/4 + 1/2" → 3/4 (or 0.75, 75)
-    }
-
-    /// Operations available within `.calculate` (Mode 4).
+    /// Question forms used by `makeFraction`. All four are mixed at every tier;
+    /// difficulty is controlled by the denominator cap, not by the operation type.
     private enum FractionForm {
         case add, subtract, multiply, divide
     }
 
-    /// Per-tier configuration for fraction problems.
-    private struct FractionConfig {
-        let denominators: [Int]
-        let allowedModes: [FractionMode]
-        let calcOps: [FractionForm]
-        let calcDenomCompatibility: DenomCompatibility
-        let simplifyMaxFactor: Int
-
-        enum DenomCompatibility {
-            case same          // d == b
-            case compatible    // one divides the other
-            case any
-        }
-    }
-
-    private func fractionConfig(for difficulty: Difficulty) -> FractionConfig {
-        switch difficulty {
-        case .range1to10:
-            return FractionConfig(
-                denominators: [2, 3, 4, 5, 10],
-                allowedModes: FractionMode.allCases,
-                calcOps: [.add, .subtract, .multiply],
-                calcDenomCompatibility: .same,
-                simplifyMaxFactor: 3
-            )
-        case .range1to100:
-            return FractionConfig(
-                denominators: [2, 3, 4, 5, 6, 8, 10],
-                allowedModes: FractionMode.allCases,
-                calcOps: [.add, .subtract, .multiply, .divide],
-                calcDenomCompatibility: .compatible,
-                simplifyMaxFactor: 5
-            )
-        case .range1to1000, .adaptive:
-            return FractionConfig(
-                denominators: Array(2...20),
-                allowedModes: FractionMode.allCases,
-                calcOps: [.add, .subtract, .multiply, .divide],
-                calcDenomCompatibility: .any,
-                simplifyMaxFactor: 7
-            )
-        }
-    }
-
     private func makeFraction(difficulty: Difficulty) -> Problem {
-        let config = fractionConfig(for: difficulty)
-        let mode = config.allowedModes.randomElement()!
-
-        switch mode {
-        case .toDecimalOrPercent:
-            return makeFractionToDecimalOrPercent(config: config)
-        case .fromDecimalOrPercent:
-            return makeFractionFromDecimalOrPercent(config: config)
-        case .simplify:
-            return makeFractionSimplify(config: config)
-        case .calculate:
-            return makeFractionCalculate(config: config)
+        // Per-tier denominator cap. Fractions are always near 0–2 so the result
+        // cap doesn't apply — denominator size is the real difficulty knob.
+        let maxDenom: Int
+        switch difficulty {
+        case .range1to10:              maxDenom = 5
+        case .range1to100:             maxDenom = 8
+        case .range1to1000, .adaptive: maxDenom = 12
         }
-    }
 
-    /// Mode 1: "a/b as a decimal" or "a/b as a %" → numeric answer in the
-    /// requested format. Tolerance is 0.01 for decimals, 0.5 for percentages
-    /// (so "33" is accepted for 1/3 as a percentage).
-    private func makeFractionToDecimalOrPercent(config: FractionConfig) -> Problem {
-        let denom = config.denominators.randomElement()!
-        let num = Int.random(in: 1..<denom)
-        let asPercent = Bool.random()
+        var b = Int.random(in: 2...maxDenom)
+        var d = Int.random(in: 2...maxDenom)
+        var a = Int.random(in: 1..<b)
+        var c = Int.random(in: 1..<d)
 
-        let frac = Double(num) / Double(denom)
-        let canonical = asPercent ? frac * 100 : frac
-        let tolerance = asPercent ? 0.5 : 0.01
+        let forms: [FractionForm] = [.add, .subtract, .multiply, .divide]
+        let form = forms.randomElement()!
 
-        let formatLabel = asPercent ? "as a %" : "as a decimal"
-        let text = "\(num)/\(denom) \(formatLabel)"
+        let text: String
+        let numerator: Int
+        let denominator: Int
 
-        let displayString = asPercent
-            ? "\(formatClean(canonical))%"
-            : formatClean(canonical)
-
-        let intPart = Int(abs(canonical))
-        let hasDecimals = canonical != canonical.rounded()
-        let digitCount = intPart == 0 ? 1 : String(intPart).count
-
-        return Problem(
-            text: text,
-            operation: .fraction,
-            inputKind: .singleField,
-            answer: .number(value: canonical, tolerance: tolerance),
-            correctAnswer: canonical,
-            displayAnswer: displayString,
-            expectedDigitCount: digitCount,
-            hasDecimals: hasDecimals,
-            isNegative: false
-        )
-    }
-
-    /// Mode 2: "0.75 as a fraction" or "75% as a fraction" → simplified fraction.
-    /// Restricted to denominators whose decimal representation terminates so the
-    /// displayed source is a clean number.
-    private func makeFractionFromDecimalOrPercent(config: FractionConfig) -> Problem {
-        let cleanDenoms = config.denominators.filter { d in
-            var n = d
-            while n % 2 == 0 { n /= 2 }
-            while n % 5 == 0 { n /= 5 }
-            return n == 1
-        }
-        let pool = cleanDenoms.isEmpty ? [2] : cleanDenoms
-        let denom = pool.randomElement()!
-        let num = Int.random(in: 1..<denom)
-        let (sn, sd) = simplifyPair(num, denom)
-
-        let value = Double(num) / Double(denom)
-        let asPercent = Bool.random()
-        let displayValue = asPercent ? value * 100 : value
-        let displayString = asPercent
-            ? "\(formatClean(displayValue))%"
-            : formatClean(displayValue)
-
-        let text = "\(displayString) as a fraction"
-
-        return Problem(
-            text: text,
-            operation: .fraction,
-            inputKind: .twoFieldFraction(allowEmptyDenominator: false),
-            answer: .fraction(numerator: sn, denominator: sd),
-            correctAnswer: Double(sn) / Double(sd),
-            displayAnswer: "\(sn)/\(sd)",
-            expectedDigitCount: 1,
-            hasDecimals: false,
-            isNegative: false
-        )
-    }
-
-    /// Mode 3: "Simplify N/D" → simplified fraction. The displayed N/D is
-    /// guaranteed to NOT already be in lowest terms (factor ≥ 2).
-    private func makeFractionSimplify(config: FractionConfig) -> Problem {
-        let baseDenom = config.denominators.randomElement()!
-        let baseNum = Int.random(in: 1..<baseDenom)
-        let (bn, bd) = simplifyPair(baseNum, baseDenom)
-        let factor = Int.random(in: 2...max(2, config.simplifyMaxFactor))
-        let displayN = bn * factor
-        let displayD = bd * factor
-
-        let text = "Simplify \(displayN)/\(displayD)"
-
-        return Problem(
-            text: text,
-            operation: .fraction,
-            inputKind: .twoFieldFraction(allowEmptyDenominator: false),
-            answer: .fraction(numerator: bn, denominator: bd),
-            correctAnswer: Double(bn) / Double(bd),
-            displayAnswer: "\(bn)/\(bd)",
-            expectedDigitCount: 1,
-            hasDecimals: false,
-            isNegative: false
-        )
-    }
-
-    /// Mode 4: "a/b ⊕ c/d" → simplified fraction. Equivalent decimal/percentage
-    /// answers are also accepted (denominator field left empty).
-    private func makeFractionCalculate(config: FractionConfig) -> Problem {
-        for _ in 0..<maxRetries {
-            let op = config.calcOps.randomElement()!
-            var b = config.denominators.randomElement()!
-            var d = pickCompatibleDenominator(b: b, config: config)
-            var a = Int.random(in: 1..<b)
-            var c = Int.random(in: 1..<d)
-
-            var num = 0
-            var denom = 1
-            let text: String
-
-            switch op {
-            case .add:
-                num = a * d + c * b
-                denom = b * d
-                text = "\(a)/\(b) + \(c)/\(d)"
-            case .subtract:
-                if a * d < c * b { swap(&a, &c); swap(&b, &d) }
-                num = a * d - c * b
-                denom = b * d
-                text = "\(a)/\(b) - \(c)/\(d)"
-            case .multiply:
-                num = a * c
-                denom = b * d
-                text = "\(a)/\(b) × \(c)/\(d)"
-            case .divide:
-                num = a * d
-                denom = b * c
-                text = "\(a)/\(b) ÷ \(c)/\(d)"
+        switch form {
+        case .add:
+            numerator = a * d + c * b
+            denominator = b * d
+            text = "\(a)/\(b) + \(c)/\(d)"
+        case .subtract:
+            // Swap operands if needed so the result stays non-negative.
+            if a * d < c * b {
+                swap(&a, &c)
+                swap(&b, &d)
             }
-
-            // Reject zero answers — trivial and awkward to enter.
-            if num == 0 { continue }
-
-            let (sn, sd) = simplifyPair(num, denom)
-
-            return Problem(
-                text: text,
-                operation: .fraction,
-                inputKind: .twoFieldFraction(allowEmptyDenominator: true),
-                answer: .fractionOrEquivalent(numerator: sn, denominator: sd),
-                correctAnswer: Double(sn) / Double(sd),
-                displayAnswer: "\(sn)/\(sd)",
-                expectedDigitCount: 1,
-                hasDecimals: false,
-                isNegative: false
-            )
+            numerator = a * d - c * b
+            denominator = b * d
+            text = "\(a)/\(b) - \(c)/\(d)"
+        case .multiply:
+            numerator = a * c
+            denominator = b * d
+            text = "\(a)/\(b) × \(c)/\(d)"
+        case .divide:
+            // a/b ÷ c/d = (a × d) / (b × c)
+            numerator = a * d
+            denominator = b * c
+            text = "\(a)/\(b) ÷ \(c)/\(d)"
         }
 
-        // Safe fallback.
-        return Problem(
-            text: "1/2 + 1/2",
-            operation: .fraction,
-            inputKind: .twoFieldFraction(allowEmptyDenominator: true),
-            answer: .fractionOrEquivalent(numerator: 1, denominator: 1),
-            correctAnswer: 1.0,
-            displayAnswer: "1/1",
-            expectedDigitCount: 1,
-            hasDecimals: false,
-            isNegative: false
-        )
-    }
-
-    private func pickCompatibleDenominator(b: Int, config: FractionConfig) -> Int {
-        switch config.calcDenomCompatibility {
-        case .same:
-            return b
-        case .compatible:
-            let candidates = config.denominators.filter { d in d % b == 0 || b % d == 0 }
-            return candidates.randomElement() ?? b
-        case .any:
-            return config.denominators.randomElement()!
-        }
+        let answer = (Double(numerator) / Double(denominator) * 100).rounded() / 100
+        return buildProblem(text: text, answer: answer, operation: .fraction)
     }
 
     // MARK: - Helpers
 
-    /// Builds a single-field, numeric-answer Problem. Used by every operation
-    /// other than the fraction modes (which build their own Problems directly).
     private func buildProblem(text: String, answer: Double, operation: MathOperation) -> Problem {
         let isNegative = answer < 0
         let absAnswer = abs(answer)
         let hasDecimals = absAnswer != absAnswer.rounded()
         let intPart = Int(absAnswer)
         let digitCount = intPart == 0 ? 1 : String(intPart).count
-        let displayString = hasDecimals
-            ? String(format: "%.2f", answer)
-            : String(Int(answer))
 
         return Problem(
             text: text,
-            operation: operation,
-            inputKind: .singleField,
-            answer: .number(value: answer, tolerance: 0.01),
             correctAnswer: answer,
-            displayAnswer: displayString,
+            operation: operation,
             expectedDigitCount: digitCount,
             hasDecimals: hasDecimals,
             isNegative: isNegative
@@ -596,31 +420,5 @@ struct ProblemGenerator {
         var result = 1
         for _ in 0..<exp { result *= base }
         return result
-    }
-
-    /// Standard Euclidean GCD on absolute values. Used by `makePercentage`
-    /// (to derive valid bases) and by `simplifyPair`.
-    private func gcd(_ a: Int, _ b: Int) -> Int {
-        var x = abs(a), y = abs(b)
-        while y != 0 {
-            (x, y) = (y, x % y)
-        }
-        return x
-    }
-
-    private func simplifyPair(_ a: Int, _ b: Int) -> (Int, Int) {
-        let g = gcd(a, b)
-        return (a / g, b / g)
-    }
-
-    /// Format a double with no trailing zeros: 75 → "75", 0.5 → "0.5", 12.5 → "12.5".
-    private func formatClean(_ x: Double) -> String {
-        if x == x.rounded() {
-            return String(Int(x))
-        }
-        var s = String(format: "%.4f", x)
-        while s.hasSuffix("0") { s.removeLast() }
-        if s.hasSuffix(".") { s.removeLast() }
-        return s
     }
 }

@@ -80,6 +80,11 @@ class SettingsViewModel {
         settings.hapticEnabled.toggle()
     }
 
+    func toggleShowCorrectAnswer() {
+        guard let settings else { return }
+        settings.showCorrectAnswerOnMistake.toggle()
+    }
+
     // MARK: - Notifications
 
     func toggleNotifications() {

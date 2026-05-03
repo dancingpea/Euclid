@@ -47,7 +47,7 @@ class GameSession {
         correctAnswers: Int = 0,
         skippedCount: Int = 0,
         operations: [String] = [],
-        difficulty: String = Difficulty.range1to100.rawValue,
+        difficulty: String = Difficulty.range1to10.rawValue,
         gameMode: String = GameMode.timed.rawValue,
         problemResultsData: Data? = nil
     ) {
