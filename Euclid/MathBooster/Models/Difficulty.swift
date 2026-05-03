@@ -22,9 +22,9 @@ enum Difficulty: String, CaseIterable, Codable, Identifiable {
 
     var description: String {
         switch self {
-        case .range1to10:   return "Single-digit operations (1–10)"
-        case .range1to100:  return "Two-digit operations (1–100)"
-        case .range1to1000: return "Three-digit operations (1–1,000)"
+        case .range1to10:   return "Simple operations"
+        case .range1to100:  return "Intermediate level"
+        case .range1to1000: return "Hardest problems"
         case .adaptive:     return "Starts easy, gets harder as you improve"
         }
     }
